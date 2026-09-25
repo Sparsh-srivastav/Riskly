@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: riskly-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: riskly
+      POSTGRES_USER: riskly
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5433:5432"
+    volumes:
+      - riskly_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U riskly -d riskly"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  riskly_postgres_data:
