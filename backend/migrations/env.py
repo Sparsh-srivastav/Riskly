@@ -5,6 +5,7 @@ from sqlalchemy import create_engine
 
 from app.core.config import settings
 from app.core.database import Base
+from app.models.user import User
 
 config = context.config
 
@@ -27,7 +28,10 @@ def run_migrations_offline() -> None:
 
 
 def run_migrations_online() -> None:
-    engine = create_engine(settings.database_url)
+    engine = create_engine(
+        settings.database_url,
+        pool_pre_ping=True,
+    )
 
     with engine.connect() as connection:
         context.configure(
