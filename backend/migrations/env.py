@@ -5,7 +5,8 @@ from sqlalchemy import create_engine
 
 from app.core.config import settings
 from app.core.database import Base
-from app.models.user import User
+from app.models import contact, user
+
 
 config = context.config
 
