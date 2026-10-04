@@ -5,7 +5,9 @@ from sqlalchemy import create_engine
 
 from app.core.config import settings
 from app.core.database import Base
-from app.models import contact, user
+
+# Import all models so Alembic can detect them
+from app.models import User, Contact, Report
 
 
 config = context.config

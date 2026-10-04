@@ -1,4 +1,5 @@
 from datetime import datetime
+from uuid import UUID
 
 from pydantic import BaseModel, Field
 
@@ -10,7 +11,7 @@ class ContactCreate(BaseModel):
 
 
 class ContactResponse(BaseModel):
-    id: str
+    id: UUID
     contact_value: str
     contact_type: str
     label: str | None
