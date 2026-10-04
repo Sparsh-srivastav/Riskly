@@ -6,9 +6,9 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.security import get_current_user
+from app.models.contact import Contact
 from app.models.report import Report
 from app.models.user import User
-from app.models.contact import Contact
 from app.schemas.report import ReportCreate, ReportResponse
 
 
@@ -30,7 +30,8 @@ def create_report(
 ):
     contact = db.scalar(
         select(Contact).where(
-            Contact.id == report_data.contact_id
+            Contact.id == report_data.contact_id,
+            Contact.owner_id == current_user.id,
         )
     )
 
