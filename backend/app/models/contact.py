@@ -30,6 +30,16 @@ class Contact(Base):
         index=True,
     )
 
+    identity_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey(
+            "contact_identities.id",
+            name="fk_contacts_identity_id_contact_identities",
+            ondelete="SET NULL",
+        ),
+        nullable=True,
+        index=True,
+    )
+
     contact_value: Mapped[str] = mapped_column(
         String(255),
         nullable=False,

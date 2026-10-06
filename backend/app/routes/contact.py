@@ -9,7 +9,7 @@ from app.core.security import get_current_user
 from app.models.contact import Contact
 from app.models.user import User
 from app.schemas.contact import ContactCreate, ContactResponse
-
+from app.services.contact_identity import get_or_create_contact_identity
 
 router = APIRouter(
     prefix="/contacts",
@@ -27,8 +27,15 @@ def create_contact(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    identity = get_or_create_contact_identity(
+        db=db,
+        contact_type=data.contact_type,
+        contact_value=data.contact_value,
+    )
+
     contact = Contact(
         owner_id=current_user.id,
+        identity_id=identity.id,
         contact_value=data.contact_value,
         contact_type=data.contact_type,
         label=data.label,
