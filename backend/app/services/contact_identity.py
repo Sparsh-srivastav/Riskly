@@ -1,51 +1,35 @@
-from sqlalchemy import select
-from sqlalchemy.orm import Session
+"""
+Contact Identity Service.
+Handles normalization and canonical resolution of contact identities.
+"""
 
+from sqlalchemy.orm import Session
 from app.models.contact_identity import ContactIdentity
 
 
-def normalize_contact_value(contact_type: str, contact_value: str) -> str:
-    value = contact_value.strip()
+def get_or_create_contact_identity(contact_type: str, contact_value: str, db: Session) -> ContactIdentity:
+    """
+    Fetches an existing canonical identity by type and normalized value,
+    or creates and returns a new one.
+    """
+    c_type = contact_type.strip().lower()
+    c_val = contact_value.strip()
 
-    if contact_type.lower() == "email":
-        return value.lower()
-
-    if contact_type.lower() == "phone":
-        return "".join(
-            character
-            for character in value
-            if character.isdigit() or character == "+"
+    identity = (
+        db.query(ContactIdentity)
+        .filter(
+            ContactIdentity.contact_type == c_type,
+            ContactIdentity.normalized_value == c_val,
         )
-
-    return value
-
-
-def get_or_create_contact_identity(
-    db: Session,
-    contact_type: str,
-    contact_value: str,
-) -> ContactIdentity:
-    normalized_value = normalize_contact_value(
-        contact_type,
-        contact_value,
+        .first()
     )
 
-    identity = db.scalar(
-        select(ContactIdentity).where(
-            ContactIdentity.contact_type == contact_type,
-            ContactIdentity.normalized_value == normalized_value,
+    if not identity:
+        identity = ContactIdentity(
+            contact_type=c_type,
+            normalized_value=c_val,
         )
-    )
-
-    if identity:
-        return identity
-
-    identity = ContactIdentity(
-        contact_type=contact_type,
-        normalized_value=normalized_value,
-    )
-
-    db.add(identity)
-    db.flush()
+        db.add(identity)
+        db.flush()
 
     return identity

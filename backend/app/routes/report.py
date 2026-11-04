@@ -1,98 +1,136 @@
-from uuid import UUID
-
+﻿import os
+import sys
+import logging
+import asyncio
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..")))
+from ml.classifier import classifier
+
 from app.core.database import get_db
 from app.core.security import get_current_user
-from app.models.contact import Contact
-from app.models.report import Report
 from app.models.user import User
-from app.schemas.report import ReportCreate, ReportResponse
+from app.models.contact_identity import ContactIdentity
+from app.models.report import Report
+from app.schemas.report import ReportCreate, ReportResponse, IdentityReputationResponse
+from app.services.reputation import calculate_identity_reputation
+from app.services.kafka_producer import publish_event
+from app.services.ws_manager import manager
+
+logger = logging.getLogger("riskly-reports")
+
+router = APIRouter(prefix="/reports", tags=["Reports & Reputation"])
 
 
-router = APIRouter(
-    prefix="/reports",
-    tags=["Reports"],
-)
+@router.get("/reputation", response_model=IdentityReputationResponse)
+def get_reputation(
+    contact_type: str,
+    contact_value: str,
+    db: Session = Depends(get_db),
+):
+    c_type = contact_type.strip().lower()
+    c_val = contact_value.strip()
+
+    identity = db.scalar(
+        select(ContactIdentity).where(
+            ContactIdentity.contact_type == c_type,
+            ContactIdentity.normalized_value == c_val,
+        )
+    )
+
+    if not identity:
+        return IdentityReputationResponse(
+            contact_type=c_type,
+            normalized_value=c_val,
+            score=0,
+            risk_level="LOW",
+            report_count=0,
+            breakdown={},
+        )
+
+    return IdentityReputationResponse(contact_type=c_type, normalized_value=c_val, **calculate_identity_reputation(identity.id, db))
 
 
-@router.post(
-    "",
-    response_model=ReportResponse,
-    status_code=status.HTTP_201_CREATED,
-)
-def create_report(
-    report_data: ReportCreate,
+@router.post("", response_model=ReportResponse, status_code=status.HTTP_201_CREATED)
+async def create_report(
+    payload: ReportCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    contact = db.scalar(
-        select(Contact).where(
-            Contact.id == report_data.contact_id,
-            Contact.owner_id == current_user.id,
+    c_type = payload.contact_type.strip().lower()
+    c_val = payload.contact_value.strip()
+
+    ml_result = classifier.analyze(payload.description or "")
+
+    identity = db.scalar(
+        select(ContactIdentity).where(
+            ContactIdentity.contact_type == c_type,
+            ContactIdentity.normalized_value == c_val,
         )
     )
 
-    if not contact:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Contact not found",
+    if not identity:
+        identity = ContactIdentity(
+            contact_type=c_type,
+            normalized_value=c_val,
         )
+        db.add(identity)
+        db.commit()
+        db.refresh(identity)
+
+    report_cat = payload.report_type.strip().lower()
+    if report_cat in ["spam", "other"] and ml_result["is_high_risk"]:
+        report_cat = ml_result["primary_category"]
 
     report = Report(
         reporter_id=current_user.id,
-        contact_id=contact.id,
-        report_type=report_data.report_type,
-        description=report_data.description,
-        evidence=report_data.evidence,
+        identity_id=identity.id,
+        report_type=report_cat,
+        description=payload.description,
+        evidence=payload.evidence,
+        status="pending",
     )
-
     db.add(report)
     db.commit()
     db.refresh(report)
 
-    return report
+    stream_payload = {
+        "report_id": str(report.id),
+        "reporter_id": str(report.reporter_id),
+        "identity_id": str(report.identity_id),
+        "contact_type": identity.contact_type,
+        "contact_value": identity.normalized_value,
+        "report_type": report.report_type,
+        "ml_risk_score": ml_result["ml_risk_score"],
+        "detected_flags": ml_result["detected_flags"],
+        "urgency_level": ml_result["urgency_level"],
+        "created_at": report.created_at.isoformat(),
+    }
 
+    # Fire-and-forget background Kafka task without blocking response
+    try:
+        asyncio.create_task(publish_event(topic="contact-reports", payload=stream_payload))
+    except Exception as exc:
+        logger.warning("Kafka dispatch failed: %s", exc)
 
-@router.get(
-    "",
-    response_model=list[ReportResponse],
-)
-def get_reports(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    reports = db.scalars(
-        select(Report)
-        .where(Report.reporter_id == current_user.id)
-        .order_by(Report.created_at.desc())
-    ).all()
+    # Broadcast directly to connected frontend clients
+    await manager.broadcast({
+        "event": "new_report",
+        **stream_payload,
+        "description": report.description,
+    })
 
-    return reports
-
-
-@router.get(
-    "/{report_id}",
-    response_model=ReportResponse,
-)
-def get_report(
-    report_id: UUID,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    report = db.scalar(
-        select(Report).where(
-            Report.id == report_id,
-            Report.reporter_id == current_user.id,
-        )
+    return ReportResponse(
+        id=str(report.id),
+        reporter_id=str(report.reporter_id),
+        status=report.status,
+        identity_id=str(report.identity_id),
+        contact_type=identity.contact_type,
+        contact_value=identity.normalized_value,
+        report_type=report.report_type,
+        description=report.description,
+        ml_risk_score=ml_result["ml_risk_score"],
+        created_at=report.created_at.isoformat(),
     )
-
-    if not report:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Report not found",
-        )
-
-    return report

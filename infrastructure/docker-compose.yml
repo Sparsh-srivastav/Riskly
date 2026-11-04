@@ -1,21 +1,89 @@
-services:
+﻿services:
   postgres:
-    image: postgres:17-alpine
+    image: postgres:15-alpine
     container_name: riskly-postgres
-    restart: unless-stopped
+    restart: always
     environment:
-      POSTGRES_DB: riskly
-      POSTGRES_USER: riskly
-      POSTGRES_PASSWORD: password
+      POSTGRES_DB: riskly_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     ports:
       - "5433:5432"
     volumes:
-      - riskly_postgres_data:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U riskly -d riskly"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d riskly_db"]
       interval: 5s
       timeout: 5s
       retries: 5
 
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: riskly-zookeeper
+    restart: always
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: riskly-kafka
+    restart: always
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+
+  backend:
+    build:
+      context: ..
+      dockerfile: backend/Dockerfile
+    container_name: riskly-backend
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      JWT_SECRET: ${JWT_SECRET}
+
+  stream-processor:
+    build:
+      context: ..
+      dockerfile: stream-processor/Dockerfile
+    container_name: riskly-stream-processor
+    restart: always
+    depends_on:
+      - kafka
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+
+  frontend:
+    build:
+      context: ..
+      dockerfile: frontend/Dockerfile
+    container_name: riskly-frontend
+    restart: always
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend
+
 volumes:
-  riskly_postgres_data:
+  postgres_data:

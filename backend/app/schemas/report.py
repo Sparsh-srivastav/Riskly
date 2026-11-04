@@ -1,12 +1,12 @@
 from datetime import datetime
 from uuid import UUID
-
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict
 
 
 class ReportCreate(BaseModel):
-    contact_id: UUID
-    report_type: str = Field(min_length=1, max_length=30)
+    contact_type: str
+    contact_value: str
+    report_type: str
     description: str | None = None
     evidence: str | None = None
 
@@ -16,9 +16,19 @@ class ReportResponse(BaseModel):
 
     id: UUID
     reporter_id: UUID
-    contact_id: UUID
+    identity_id: UUID
     report_type: str
-    description: str | None
-    evidence: str | None
+    description: str | None = None
+    evidence: str | None = None
     status: str
     created_at: datetime
+
+
+class IdentityReputationResponse(BaseModel):
+    identity_id: UUID | None = None
+    contact_type: str
+    normalized_value: str
+    score: int
+    risk_level: str
+    report_count: int
+    breakdown: dict[str, int]
