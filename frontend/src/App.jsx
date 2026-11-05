@@ -181,7 +181,7 @@ export default function App() {
                 <Search className='w-3.5 h-3.5 text-indigo-400' />
                 <span>Verify Identity Reputation</span>
               </h2>
-              <span className='text-[10px] text-emerald-400 font-mono bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded'>((•)) Live Pipeline</span>
+              <span className='text-[10px] text-emerald-400 font-mono bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded'>(()) Live Pipeline</span>
             </div>
 
             <form onSubmit={handleScan} className='flex space-x-2'>
