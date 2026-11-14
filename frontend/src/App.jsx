@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   ShieldAlert, Activity, Search, RefreshCw, AlertTriangle, 
-  Send, KeyRound, Zap, Database, TrendingUp, Users,
-  BarChart3, Filter, Radio, Flame, ShieldPlus, ExternalLink
+  Send, KeyRound, Zap, ChevronRight, Database, TrendingUp, Users,
+  BarChart3, Filter, Radio, ShieldCheck, Terminal
 } from 'lucide-react';
 
 const API_BASE = 'http://127.0.0.1:8000';
@@ -30,11 +30,11 @@ const api = async (path, method = 'GET', body = null, token = null) => {
 };
 
 const VECTOR_CONFIG = {
-  fraud: { label: 'Fraud Scam', color: '#f43f5e' },
-  phishing: { label: 'Phishing', color: '#f59e0b' },
-  impersonation: { label: 'Impersonation', color: '#a855f7' },
-  harassment: { label: 'Harassment', color: '#38bdf8' },
-  spam: { label: 'Spam Call', color: '#ef4444' },
+  fraud: { label: 'Fraud Scam', color: '#f43f5e', badge: 'bg-rose-500/10 text-rose-400 border-rose-500/20' },
+  phishing: { label: 'Phishing', color: '#f59e0b', badge: 'bg-amber-500/10 text-amber-400 border-amber-500/20' },
+  impersonation: { label: 'Impersonation', color: '#a855f7', badge: 'bg-purple-500/10 text-purple-400 border-purple-500/20' },
+  harassment: { label: 'Harassment', color: '#38bdf8', badge: 'bg-sky-500/10 text-sky-400 border-sky-500/20' },
+  spam: { label: 'Spam Call', color: '#ef4444', badge: 'bg-red-500/10 text-red-400 border-red-500/20' },
 };
 
 export default function App() {
@@ -70,7 +70,6 @@ export default function App() {
   const [scanErr, setScanErr] = useState('');
 
   const [feedFilter, setFeedFilter] = useState('ALL');
-  const [actionNotice, setActionNotice] = useState('');
 
   const wsRef = useRef(null);
 
@@ -96,18 +95,6 @@ export default function App() {
       ws.onmessage = (e) => {
         try {
           const item = JSON.parse(e.data);
-          
-          // Handle remote triage mutations from other analysts
-          if (item.event_type === 'triage_mutation') {
-            setReports(prev => prev.map(r => {
-              if (r.id === item.id || (r.contact_value === item.contact_value && !r.id)) {
-                return { ...r, urgency_level: item.urgency_level, ml_risk_score: item.ml_risk_score };
-              }
-              return r;
-            }));
-            return;
-          }
-
           setReports(prev => [item, ...prev.slice(0, 49)]);
           setMetrics(prev => {
             const cat = (item.report_type || 'fraud').toLowerCase();
@@ -200,50 +187,11 @@ export default function App() {
     }
   };
 
-  // Backend Synced Actions
-  const handleEscalateUrgency = async (item, idx, e) => {
-    e.stopPropagation();
-    // Optimistic UI update
-    setReports(prev => prev.map((r, i) => i === idx ? { ...r, urgency_level: 'critical' } : r));
-    setActionNotice(`Escalating ${item.contact_value} to CRITICAL...`);
-
-    if (item.id) {
-      try {
-        await api(`/reports/${item.id}/triage`, 'PATCH', { urgency_level: 'critical' }, token);
-        setActionNotice(`Synced: ${item.contact_value} marked as CRITICAL across nodes.`);
-      } catch (err) {
-        setActionNotice(`Sync Error: ${err.message}`);
-      }
-    } else {
-      setActionNotice(`Escalated locally (${item.contact_value}).`);
-    }
-    setTimeout(() => setActionNotice(''), 3500);
-  };
-
-  const handleBoostConfidence = async (item, idx, e) => {
-    e.stopPropagation();
-    // Optimistic UI update
-    setReports(prev => prev.map((r, i) => i === idx ? { ...r, ml_risk_score: 85 } : r));
-    setActionNotice(`Flagging ${item.contact_value} with 85% risk confidence...`);
-
-    if (item.id) {
-      try {
-        await api(`/reports/${item.id}/triage`, 'PATCH', { ml_risk_score: 85 }, token);
-        setActionNotice(`Synced: ${item.contact_value} risk confidence pinned to 85%.`);
-      } catch (err) {
-        setActionNotice(`Sync Error: ${err.message}`);
-      }
-    } else {
-      setActionNotice(`Flagged locally (${item.contact_value}).`);
-    }
-    setTimeout(() => setActionNotice(''), 3500);
-  };
-
   const totalCatReports = Object.values(metrics.categories || {}).reduce((a, b) => a + b, 0) || 1;
 
   const filteredReports = reports.filter(item => {
     if (feedFilter === 'ALL') return true;
-    if (feedFilter === 'HIGH_RISK') return (item.ml_risk_score >= 50 || item.urgency_level?.toLowerCase() === 'high' || item.urgency_level?.toLowerCase() === 'critical');
+    if (feedFilter === 'HIGH_RISK') return (item.ml_risk_score >= 50 || item.urgency_level?.toLowerCase() === 'high');
     return (item.report_type || '').toLowerCase() === feedFilter.toLowerCase();
   });
 
@@ -538,7 +486,7 @@ export default function App() {
                     </span>
                   </div>
 
-                  <div style={{ background: '#131726', padding: '10px', borderRadius: '8px', border: '1px solid rgba(255, 255, 255, 0.04)' }}>
+                  <div style={{ background: '#131726', padding: '10px', borderRadius: '8px', border: '1px solid rgba(255, 255, 0.04)' }}>
                     <span style={{ fontSize: '10px', color: '#64748b', display: 'block' }}>Recidivism</span>
                     <span className="font-mono" style={{ fontSize: '16px', fontWeight: '700', color: '#fbbf24' }}>
                       {scanRes.recidivism_multiplier ? `${scanRes.recidivism_multiplier}x` : '1.0x'}
@@ -556,22 +504,8 @@ export default function App() {
                 <Activity style={{ width: '15px', height: '15px', color: '#38bdf8' }} />
                 <span style={{ fontSize: '12px', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.04em', color: '#e2e8f0' }}>Live Ingestion Stream</span>
               </div>
-              <span style={{ fontSize: '11px', color: '#64748b' }}>Interactive Triage Console</span>
+              <span style={{ fontSize: '11px', color: '#64748b' }}>Real-time telemetry intake</span>
             </div>
-
-            {actionNotice && (
-              <div style={{ 
-                background: 'rgba(79, 70, 229, 0.15)', 
-                border: '1px solid rgba(99, 102, 241, 0.3)', 
-                borderRadius: '6px', 
-                padding: '6px 12px', 
-                fontSize: '11px', 
-                color: '#a5b4fc', 
-                marginBottom: '10px' 
-              }}>
-                {actionNotice}
-              </div>
-            )}
 
             {/* Filter Pills */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '12px', overflowX: 'auto', paddingBottom: '4px' }}>
@@ -607,17 +541,20 @@ export default function App() {
               ) : (
                 filteredReports.map((item, idx) => {
                   const conf = VECTOR_CONFIG[(item.report_type || 'fraud').toLowerCase()] || VECTOR_CONFIG.fraud;
-                  const isCritical = item.urgency_level?.toLowerCase() === 'critical';
                   return (
                     <div 
                       key={idx}
+                      onClick={() => { setSearch({ type: 'auto', value: item.contact_value }); triggerSearch(item.contact_value); }}
                       style={{
                         background: '#121522',
-                        border: isCritical ? '1px solid rgba(244, 63, 94, 0.4)' : '1px solid rgba(255, 255, 255, 0.05)',
+                        border: '1px solid rgba(255, 255, 255, 0.05)',
                         borderRadius: '8px',
                         padding: '12px 14px',
+                        cursor: 'pointer',
                         transition: 'border-color 0.15s ease'
                       }}
+                      onMouseEnter={(e) => e.currentTarget.style.borderColor = 'rgba(99, 102, 241, 0.4)'}
+                      onMouseLeave={(e) => e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.05)'}
                     >
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -648,83 +585,9 @@ export default function App() {
                         </p>
                       )}
 
-                      <div style={{ 
-                        display: 'flex', 
-                        alignItems: 'center', 
-                        justifyContent: 'space-between', 
-                        fontSize: '10px', 
-                        color: '#64748b', 
-                        borderTop: '1px solid rgba(255, 255, 255, 0.04)', 
-                        paddingTop: '8px',
-                        marginTop: '4px'
-                      }}>
-                        <div style={{ display: 'flex', gap: '12px' }}>
-                          <span>ML Conf: <strong style={{ color: item.ml_risk_score >= 50 ? '#fb7185' : '#cbd5e1' }}>{item.ml_risk_score ?? 0}%</strong></span>
-                          <span>Urgency: <strong style={{ color: isCritical ? '#fb7185' : '#cbd5e1' }}>{item.urgency_level ?? 'Standard'}</strong></span>
-                        </div>
-
-                        {/* Interactive Sync Buttons */}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          <button
-                            title="Quick scan this entity"
-                            onClick={() => { setSearch({ type: 'auto', value: item.contact_value }); triggerSearch(item.contact_value); }}
-                            style={{
-                              background: '#1a2035',
-                              border: '1px solid rgba(255, 255, 255, 0.08)',
-                              color: '#94a3b8',
-                              padding: '3px 7px',
-                              borderRadius: '4px',
-                              cursor: 'pointer',
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '3px',
-                              fontSize: '10px'
-                            }}
-                          >
-                            <ExternalLink style={{ width: '10px', height: '10px' }} />
-                            <span>Scan</span>
-                          </button>
-
-                          <button
-                            title="Escalate urgency level"
-                            onClick={(e) => handleEscalateUrgency(item, idx, e)}
-                            style={{
-                              background: isCritical ? 'rgba(244, 63, 94, 0.2)' : '#1a2035',
-                              border: isCritical ? '1px solid rgba(244, 63, 94, 0.4)' : '1px solid rgba(255, 255, 255, 0.08)',
-                              color: isCritical ? '#fb7185' : '#94a3b8',
-                              padding: '3px 7px',
-                              borderRadius: '4px',
-                              cursor: 'pointer',
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '3px',
-                              fontSize: '10px'
-                            }}
-                          >
-                            <Flame style={{ width: '10px', height: '10px' }} />
-                            <span>Escalate</span>
-                          </button>
-
-                          <button
-                            title="Boost threat weight"
-                            onClick={(e) => handleBoostConfidence(item, idx, e)}
-                            style={{
-                              background: '#1a2035',
-                              border: '1px solid rgba(255, 255, 255, 0.08)',
-                              color: '#94a3b8',
-                              padding: '3px 7px',
-                              borderRadius: '4px',
-                              cursor: 'pointer',
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '3px',
-                              fontSize: '10px'
-                            }}
-                          >
-                            <ShieldPlus style={{ width: '10px', height: '10px' }} />
-                            <span>Flag 85%</span>
-                          </button>
-                        </div>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '10px', color: '#64748b', borderTop: '1px solid rgba(255, 255, 255, 0.04)', paddingTop: '6px' }}>
+                        <span>ML Confidence: <strong style={{ color: '#cbd5e1' }}>{item.ml_risk_score ?? 0}%</strong></span>
+                        <span>Urgency: <strong style={{ color: '#cbd5e1' }}>{item.urgency_level ?? 'Standard'}</strong></span>
                       </div>
                     </div>
                   );
@@ -957,3 +820,4 @@ export default function App() {
     </div>
   );
 }
+

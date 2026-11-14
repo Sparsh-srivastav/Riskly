@@ -151,3 +151,41 @@ async def update_report_triage(
     await manager.broadcast(event_payload)
 
     return {"status": "success", "report": event_payload}
+
+@router.get("/lookup")
+def lookup_threat(q: str, db: Session = Depends(get_db)):
+    query = q.strip().lower()
+    if not query:
+        return {"query": query, "results": []}
+
+    # Find matching identity
+    identities = db.query(ContactIdentity).filter(
+        ContactIdentity.normalized_value.contains(query)
+    ).all()
+    
+    identity_ids = [ident.id for ident in identities]
+
+    reports = db.query(Report).filter(
+        (Report.description.contains(query)) |
+        (Report.report_type.contains(query)) |
+        (Report.identity_id.in_(identity_ids))
+    ).all() if identity_ids else db.query(Report).filter(
+        (Report.description.contains(query)) |
+        (Report.report_type.contains(query))
+    ).all()
+
+    results = []
+    for rep in reports:
+        ident = db.query(ContactIdentity).filter(ContactIdentity.id == rep.identity_id).first()
+        results.append({
+            "id": str(rep.id),
+            "contact_type": ident.contact_type if ident else "unknown",
+            "contact_value": ident.normalized_value if ident else "N/A",
+            "report_type": rep.report_type,
+            "description": rep.description,
+            "status": rep.status,
+            "ml_risk_score": 85 if rep.status in ["critical", "escalated"] else 45,
+            "created_at": str(rep.created_at)
+        })
+
+    return {"query": query, "total_matches": len(results), "results": results}
