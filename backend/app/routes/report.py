@@ -1,9 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+﻿from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from sqlalchemy import func
-from typing import List, Optional
+from typing import Optional
 from pydantic import BaseModel
-from datetime import datetime
 import uuid
 
 from app.core.database import get_db
@@ -12,8 +11,17 @@ from app.models.contact_identity import ContactIdentity
 from app.models.user import User
 from app.schemas.report import ReportCreate
 from app.services.ws_manager import manager
+from app.routes.auth import get_current_user
 
 router = APIRouter(prefix="/reports", tags=["Reports"])
+
+VECTOR_WEIGHTS = {
+    "fraud": 30,
+    "phishing": 25,
+    "impersonation": 35,
+    "harassment": 20,
+    "spam": 10,
+}
 
 class TriageUpdate(BaseModel):
     urgency_level: Optional[str] = None
@@ -27,19 +35,69 @@ def get_or_create_system_user(db: Session) -> uuid.UUID:
     if not user:
         user = User(
             email="analyst@riskly.dev",
-            hashed_password="mock_password_hash",
-            is_active=True
+            password_hash="mock_password_hash",
+            role="analyst",
         )
         db.add(user)
         db.commit()
         db.refresh(user)
     return user.id
 
+@router.get("/reputation")
+def get_reputation(
+    contact_type: str,
+    contact_value: str,
+    db: Session = Depends(get_db),
+):
+    c_type = contact_type.strip().lower()
+    c_val = contact_value.strip()
+
+    identity = db.query(ContactIdentity).filter(
+        ContactIdentity.contact_type == c_type,
+        ContactIdentity.normalized_value == c_val,
+    ).first()
+
+    if not identity:
+        return {
+            "contact_type": c_type,
+            "contact_value": c_val,
+            "score": 0,
+            "risk_level": "LOW",
+            "report_count": 0,
+            "recidivism_multiplier": 1.0,
+        }
+
+    reports = db.query(Report).filter(Report.identity_id == identity.id).all()
+    report_count = len(reports)
+    if report_count == 0:
+        return {
+            "contact_type": c_type,
+            "contact_value": c_val,
+            "score": 0,
+            "risk_level": "LOW",
+            "report_count": 0,
+            "recidivism_multiplier": 1.0,
+        }
+
+    base_score = sum(VECTOR_WEIGHTS.get((r.report_type or "").lower(), 20) for r in reports)
+    multiplier = round(1.0 + (report_count - 1) * 0.25, 2)
+    score = min(100, int(round(base_score * multiplier)))
+    risk_level = "HIGH" if score >= 75 else ("MEDIUM" if score >= 45 else "LOW")
+
+    return {
+        "contact_type": c_type,
+        "contact_value": c_val,
+        "score": score,
+        "risk_level": risk_level,
+        "report_count": report_count,
+        "recidivism_multiplier": multiplier,
+    }
+
 @router.get("/analytics/summary")
 def get_analytics_summary(db: Session = Depends(get_db)):
     total_reports = db.query(Report).count()
     total_identities = db.query(ContactIdentity).count()
-    
+
     escalated_count = db.query(Report).filter(Report.status.in_(["critical", "flagged", "escalated"])).count()
 
     category_counts = db.query(Report.report_type, func.count(Report.id)).group_by(Report.report_type).all()
@@ -53,32 +111,33 @@ def get_analytics_summary(db: Session = Depends(get_db)):
         "high_risk_identities": escalated_count,
         "reports_per_min": 24.0 if total_reports > 0 else 0,
         "active_subscribers": len(manager.active_connections),
-        "categories": categories
+        "categories": categories,
     }
 
 @router.post("", status_code=status.HTTP_201_CREATED)
 async def create_report(
     payload: ReportCreate,
-    db: Session = Depends(get_db)
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
     c_type = payload.contact_type.lower()
     c_val = payload.contact_value.strip()
 
     identity = db.query(ContactIdentity).filter(
         ContactIdentity.contact_type == c_type,
-        ContactIdentity.normalized_value == c_val
+        ContactIdentity.normalized_value == c_val,
     ).first()
 
     if not identity:
         identity = ContactIdentity(
             contact_type=c_type,
-            normalized_value=c_val
+            normalized_value=c_val,
         )
         db.add(identity)
         db.commit()
         db.refresh(identity)
 
-    reporter_id = get_or_create_system_user(db)
+    reporter_id = current_user.id or get_or_create_system_user(db)
 
     initial_status = "critical" if payload.report_type in ["fraud", "phishing"] else "pending"
     report = Report(
@@ -87,7 +146,7 @@ async def create_report(
         report_type=payload.report_type.lower(),
         description=payload.description,
         evidence=payload.evidence,
-        status=initial_status
+        status=initial_status,
     )
     db.add(report)
     db.commit()
@@ -105,7 +164,7 @@ async def create_report(
         "status": report.status,
         "ml_risk_score": ml_conf,
         "urgency_level": urgency,
-        "created_at": str(report.created_at)
+        "created_at": str(report.created_at),
     })
 
     return {
@@ -116,14 +175,14 @@ async def create_report(
         "description": report.description,
         "status": report.status,
         "ml_risk_score": ml_conf,
-        "urgency_level": urgency
+        "urgency_level": urgency,
     }
 
 @router.patch("/{report_id}/triage")
 async def update_report_triage(
     report_id: str,
     payload: TriageUpdate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     try:
         parsed_uuid = uuid.UUID(report_id)
@@ -146,7 +205,7 @@ async def update_report_triage(
         "id": str(report.id),
         "contact_value": identity.normalized_value if identity else "",
         "urgency_level": "critical" if report.status in ["critical", "escalated"] else "low",
-        "ml_risk_score": payload.ml_risk_score if payload.ml_risk_score is not None else 85
+        "ml_risk_score": payload.ml_risk_score if payload.ml_risk_score is not None else 85,
     }
     await manager.broadcast(event_payload)
 
@@ -158,11 +217,10 @@ def lookup_threat(q: str, db: Session = Depends(get_db)):
     if not query:
         return {"query": query, "results": []}
 
-    # Find matching identity
     identities = db.query(ContactIdentity).filter(
         ContactIdentity.normalized_value.contains(query)
     ).all()
-    
+
     identity_ids = [ident.id for ident in identities]
 
     reports = db.query(Report).filter(
@@ -185,7 +243,7 @@ def lookup_threat(q: str, db: Session = Depends(get_db)):
             "description": rep.description,
             "status": rep.status,
             "ml_risk_score": 85 if rep.status in ["critical", "escalated"] else 45,
-            "created_at": str(rep.created_at)
+            "created_at": str(rep.created_at),
         })
 
     return {"query": query, "total_matches": len(results), "results": results}
