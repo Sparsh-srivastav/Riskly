@@ -40,6 +40,7 @@ const VECTOR_CONFIG = {
 
 export default function App() {
   const [token, setToken] = useState(() => localStorage.getItem('token') || '');
+  const [currentUser, setCurrentUser] = useState(null);
   const [reports, setReports] = useState([]);
   const [wsStatus, setWsStatus] = useState('Connecting');
 
@@ -121,6 +122,8 @@ export default function App() {
       clearTimeout(t);
     };
   }, []);
+
+  useEffect(() => { if (!token) return; let active = true; (async () => { try { const me = await api('/auth/me', 'GET', null, token); if (active) setCurrentUser(me); } catch { const rt = localStorage.getItem('refresh_token'); if (!rt) { if (active) { localStorage.removeItem('token'); setToken(''); setCurrentUser(null); } return; } try { const rf = await api('/auth/refresh', 'POST', { refresh_token: rt }); localStorage.setItem('token', rf.access_token); if (rf.refresh_token) localStorage.setItem('refresh_token', rf.refresh_token); if (active) { setToken(rf.access_token); const me = await api('/auth/me', 'GET', null, rf.access_token); if (active) setCurrentUser(me); } } catch { localStorage.removeItem('token'); localStorage.removeItem('refresh_token'); if (active) { setToken(''); setCurrentUser(null); } } } })(); return () => { active = false; }; }, []);
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -798,7 +801,7 @@ export default function App() {
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#121522', padding: '8px 12px', borderRadius: '6px', border: '1px solid rgba(255, 255, 255, 0.05)' }}>
                 <div>
                   <span style={{ fontSize: '10px', color: '#64748b', display: 'block' }}>Signed in</span>
-                  <span className="font-mono" style={{ fontSize: '11px', color: '#34d399', fontWeight: '600' }}>{auth.email}</span>
+                  <span className="font-mono" style={{ fontSize: '11px', color: '#34d399', fontWeight: '600' }}>{currentUser ? currentUser.email + ' (' + currentUser.role + ')' : auth.email}</span>
                 </div>
                 <button
                   onClick={handleLogout}
@@ -855,5 +858,11 @@ export default function App() {
     </div>
   );
 }
+
+
+
+
+
+
 
 
