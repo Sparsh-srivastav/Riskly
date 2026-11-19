@@ -519,6 +519,33 @@ export default function App() {
                     </span>
                   </div>
                 </div>
+
+                <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid rgba(255, 255, 255, 0.05)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', marginBottom: '8px', flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: '10px', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.04em', color: '#94a3b8' }}>Entity Dossier History ({(scanRes.matches || []).length})</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <button type="button" disabled={!(scanRes.matches && scanRes.matches.length)} onClick={() => downloadCSV(scanRes.matches, 'riskly-dossier-' + String(scanRes.normalized_value || 'entity').replace(/[^a-zA-Z0-9_-]/g, '_') + '.csv')} style={{ fontSize: '10px', background: '#141827', color: (scanRes.matches && scanRes.matches.length) ? '#cbd5e1' : '#475569', border: '1px solid rgba(255,255,255,0.08)', padding: '2px 8px', borderRadius: '5px', cursor: (scanRes.matches && scanRes.matches.length) ? 'pointer' : 'not-allowed' }}>Export CSV</button>
+                      <button type="button" disabled={!(scanRes.matches && scanRes.matches.length)} onClick={() => downloadJSON(scanRes.matches, 'riskly-dossier-' + String(scanRes.normalized_value || 'entity').replace(/[^a-zA-Z0-9_-]/g, '_') + '.json')} style={{ fontSize: '10px', background: '#141827', color: (scanRes.matches && scanRes.matches.length) ? '#cbd5e1' : '#475569', border: '1px solid rgba(255,255,255,0.08)', padding: '2px 8px', borderRadius: '5px', cursor: (scanRes.matches && scanRes.matches.length) ? 'pointer' : 'not-allowed' }}>Export JSON</button>
+                    </div>
+                  </div>
+                  {(scanRes.matches && scanRes.matches.length > 0) ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '210px', overflowY: 'auto' }}>
+                      {scanRes.matches.map((m, i) => (
+                        <div key={m.id || i} style={{ background: '#121522', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '7px', padding: '8px 10px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', marginBottom: '4px' }}>
+                            <span className="font-mono" style={{ fontSize: '10px', fontWeight: '700', textTransform: 'uppercase', color: '#818cf8' }}>{m.report_type || 'report'} ? {m.status || 'logged'}</span>
+                            <span className="font-mono" style={{ fontSize: '10px', color: '#94a3b8' }}>Risk {m.ml_risk_score ?? 0}%</span>
+                          </div>
+                          {m.description && <p style={{ fontSize: '11px', color: '#cbd5e1', lineHeight: '1.35', margin: '0 0 4px 0' }}>{m.description}</p>}
+                          {m.evidence && <p className="font-mono" style={{ fontSize: '10px', color: '#94a3b8', margin: '0 0 4px 0' }}>Evidence: {m.evidence}</p>}
+                          {m.created_at && <span className="font-mono" style={{ fontSize: '9px', color: '#64748b' }}>{m.created_at}</span>}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p style={{ fontSize: '11px', color: '#64748b', margin: 0 }}>No prior incident records found for this entity.</p>
+                  )}
+                </div>
               </div>
             )}
           </div>
