@@ -144,7 +144,9 @@ export default function App() {
 
   const handleLogout = () => {
     localStorage.removeItem('token');
+    localStorage.removeItem('refresh_token');
     setToken('');
+    setCurrentUser(null);
   };
 
   const handleReport = async (e) => {
@@ -860,6 +862,7 @@ export default function App() {
     </div>
   );
 }
+
 
 
 
