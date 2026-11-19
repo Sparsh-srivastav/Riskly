@@ -175,11 +175,25 @@ export default function App() {
     setScanErr('');
 
     try {
-      const params = new URLSearchParams({ contact_value: queryVal });
-      if (type && type !== 'auto') params.append('contact_type', type);
+      const params = new URLSearchParams({ q: queryVal });
+      const data = await api(`/reports/lookup?${params.toString()}`, 'GET', null, token);
+      const matches = data.results || [];
+      const top = matches[0];
+      const maxScore = matches.length
+        ? Math.max(...matches.map(r => Number(r.ml_risk_score || 0)))
+        : 0;
+      const riskLevel = maxScore >= 75 ? 'HIGH' : maxScore >= 45 ? 'MEDIUM' : 'LOW';
 
-      const data = await api(`/reports/reputation?${params.toString()}`, 'GET', null, token);
-      setScanRes(data);
+      setScanRes({
+        found: matches.length > 0,
+        normalized_value: top ? top.contact_value : queryVal,
+        contact_type: top ? top.contact_type : (type !== 'auto' ? type : 'ENTITY'),
+        score: maxScore,
+        risk_level: riskLevel,
+        report_count: data.total_matches ?? matches.length,
+        recidivism_multiplier: matches.length > 1 ? (1 + (matches.length - 1) * 0.25).toFixed(2) : 1.0,
+        matches
+      });
     } catch (err) {
       setScanErr(err.message);
     } finally {
