@@ -535,7 +535,7 @@ export default function App() {
 
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', marginBottom: '12px', flexWrap: 'wrap' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <button type="button" onClick={() => { if (streamPaused) { setReports(prev => [...bufferedReports, ...prev].slice(0, 50)); setBufferedReports([]); setStreamPaused(false); } else { setStreamPaused(true); } }} style={{ fontSize: '10px', background: streamPaused ? 'rgba(245, 158, 11, 0.15)' : '#141827', color: streamPaused ? '#fbbf24' : '#e2e8f0', border: streamPaused ? '1px solid rgba(245, 158, 11, 0.35)' : '1px solid rgba(255,255,255,0.08)', padding: '3px 9px', borderRadius: '5px', cursor: 'pointer', fontWeight: '600' }}>{streamPaused ? Resume Stream + (bufferedReports.length ?  (+) : '') : 'Pause Stream'}</button>
+                <button type="button" onClick={() => { if (streamPaused) { setReports(prev => [...bufferedReports, ...prev].slice(0, 50)); setBufferedReports([]); setStreamPaused(false); } else { setStreamPaused(true); } }} style={{ fontSize: '10px', background: streamPaused ? 'rgba(245, 158, 11, 0.15)' : '#141827', color: streamPaused ? '#fbbf24' : '#e2e8f0', border: streamPaused ? '1px solid rgba(245, 158, 11, 0.35)' : '1px solid rgba(255,255,255,0.08)', padding: '3px 9px', borderRadius: '5px', cursor: 'pointer', fontWeight: '600' }}>{streamPaused ? 'Resume Stream' + (bufferedReports.length ? ' (+' + bufferedReports.length + ')' : '') : 'Pause Stream'}</button>
                 <button type="button" onClick={() => { try { if (wsRef.current) wsRef.current.close(); } catch {} setWsStatus('Reconnecting'); }} style={{ fontSize: '10px', background: '#141827', color: '#94a3b8', border: '1px solid rgba(255,255,255,0.08)', padding: '3px 8px', borderRadius: '5px', cursor: 'pointer' }}>Reconnect WS</button>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
@@ -870,6 +870,8 @@ export default function App() {
     </div>
   );
 }
+
+
 
 
 
