@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
+﻿import React, { useState, useEffect, useRef } from 'react';
 import { 
   ShieldAlert, Activity, Search, RefreshCw, AlertTriangle, 
   Send, KeyRound, Zap, ChevronRight, Database, TrendingUp, Users,
   BarChart3, Filter, Radio, ShieldCheck, Terminal
 } from 'lucide-react';
+import { downloadCSV, downloadJSON } from './utils/dossierExport';
 
 const API_BASE = 'http://127.0.0.1:8000';
 const WS_BASE = 'ws://127.0.0.1:8000/ws/feed';
@@ -521,6 +522,26 @@ export default function App() {
               <span style={{ fontSize: '11px', color: '#64748b' }}>Real-time telemetry intake</span>
             </div>
 
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', marginBottom: '12px', flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <button
+                  type="button"
+                  disabled={!filteredReports.length}
+                  onClick={() => downloadCSV(filteredReports, 'riskly-feed-' + String(feedFilter || 'all').toLowerCase() + '.csv')}
+                  style={{ fontSize: '10px', background: '#141827', color: filteredReports.length ? '#cbd5e1' : '#475569', border: '1px solid rgba(255,255,255,0.08)', padding: '3px 8px', borderRadius: '5px', cursor: filteredReports.length ? 'pointer' : 'not-allowed' }}
+                >
+                  Export CSV
+                </button>
+                <button
+                  type="button"
+                  disabled={!filteredReports.length}
+                  onClick={() => downloadJSON(filteredReports, 'riskly-feed-' + String(feedFilter || 'all').toLowerCase() + '.json')}
+                  style={{ fontSize: '10px', background: '#141827', color: filteredReports.length ? '#cbd5e1' : '#475569', border: '1px solid rgba(255,255,255,0.08)', padding: '3px 8px', borderRadius: '5px', cursor: filteredReports.length ? 'pointer' : 'not-allowed' }}
+                >
+                  Export JSON
+                </button>
+              </div>
+            </div>
             {/* Filter Pills */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '12px', flexWrap: 'wrap', paddingBottom: '4px' }}>
               <span style={{ fontSize: '10px', color: '#64748b', marginRight: '4px' }}>Filter:</span>
@@ -834,4 +855,5 @@ export default function App() {
     </div>
   );
 }
+
 
