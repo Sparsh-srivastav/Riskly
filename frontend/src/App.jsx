@@ -17,10 +17,11 @@ const api = async (path, method = 'GET', body = null, token = null) => {
   const res = await fetch(`${API_BASE}${path}`, {
     method,
     headers,
-    ...(body ? { body: JSON.stringify(body) } : {})
+    ...(body ? (() => { const { _retry, ...rest } = body; return Object.keys(rest).length ? { body: JSON.stringify(rest) } : {}; })() : {})
   });
 
   const data = await res.json().catch(() => ({}));
+    if (res.status === 401 && !body?._retry && !path.startsWith('/auth/login') && !path.startsWith('/auth/refresh')) { const rt = localStorage.getItem('refresh_token'); if (rt) { try { const rfRes = await fetch(`${API_BASE}/auth/refresh`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ refresh_token: rt }) }); const rfData = await rfRes.json().catch(() => ({})); if (rfRes.ok && rfData.access_token) { localStorage.setItem('token', rfData.access_token); if (rfData.refresh_token) localStorage.setItem('refresh_token', rfData.refresh_token); return await api(path, method, { ...(body || {}), _retry: true }, rfData.access_token); } } catch {} } localStorage.removeItem('token'); localStorage.removeItem('refresh_token'); }
   if (!res.ok) {
     const msg = Array.isArray(data.detail)
       ? data.detail.map(d => `${d.loc ? d.loc.slice(-1)[0] : 'field'}: ${d.msg}`).join(', ')
@@ -134,6 +135,7 @@ export default function App() {
         password: auth.password.trim()
       });
       localStorage.setItem('token', data.access_token);
+      if (data.refresh_token) localStorage.setItem('refresh_token', data.refresh_token);
       setToken(data.access_token);
     } catch (err) {
       setAuthErr(err.message);
@@ -858,6 +860,10 @@ export default function App() {
     </div>
   );
 }
+
+
+
+
 
 
 
