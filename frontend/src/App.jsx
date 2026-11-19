@@ -102,7 +102,11 @@ export default function App() {
       ws.onmessage = (e) => {
         try {
           const item = JSON.parse(e.data);
-          setReports(prev => [item, ...prev.slice(0, 49)]);
+          if (streamPausedRef.current) {
+            setBufferedReports(prev => [item, ...prev.slice(0, 99)]);
+          } else {
+            setReports(prev => [item, ...prev.slice(0, 49)]);
+          }
           setMetrics(prev => {
             const cat = (item.report_type || 'fraud').toLowerCase();
             const currCats = { ...prev.categories };
