@@ -205,7 +205,7 @@ export default function App() {
 
   const filteredReports = reports.filter(item => {
     if (feedFilter === 'ALL') return true;
-    if (feedFilter === 'HIGH_RISK') return (item.ml_risk_score >= 50 || item.urgency_level?.toLowerCase() === 'high');
+    if (feedFilter === 'HIGH_RISK') return item.urgency_level?.toLowerCase() === 'critical';
     return (item.report_type || '').toLowerCase() === feedFilter.toLowerCase();
   });
 
@@ -522,9 +522,9 @@ export default function App() {
             </div>
 
             {/* Filter Pills */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '12px', overflowX: 'auto', paddingBottom: '4px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '12px', flexWrap: 'wrap', paddingBottom: '4px' }}>
               <span style={{ fontSize: '10px', color: '#64748b', marginRight: '4px' }}>Filter:</span>
-              {['ALL', 'HIGH_RISK', 'fraud', 'phishing', 'impersonation'].map(filterKey => (
+              {['ALL', 'HIGH_RISK', 'fraud', 'phishing', 'impersonation', 'harassment', 'spam'].map(filterKey => (
                 <button
                   key={filterKey}
                   onClick={() => setFeedFilter(filterKey)}
